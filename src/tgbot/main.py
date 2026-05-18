@@ -67,7 +67,7 @@ def main() -> None:
     # Quiz answer callbacks
     app.add_handler(CallbackQueryHandler(handle_quiz_callback, pattern=r"^quiz:"))
 
-    logger.info("Starting bot with model %s at %s", config.ollama_model, config.ollama_url)
+    logger.info("Starting bot with model %s", config.claude_model)
     app.run_polling(drop_pending_updates=True)
 
 
