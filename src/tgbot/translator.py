@@ -1,26 +1,9 @@
 import json
-import httpx
+import anthropic
 
 from .config import config
 
 _LANG_NAME = {"he": "Hebrew", "ru": "Russian", "en": "English"}
-
-_TRANSLATION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "translation": {"type": "string"},
-    },
-    "required": ["translation"],
-}
-
-_TRANSLITERATE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "translation": {"type": "string"},
-        "transliteration": {"type": "string"},
-    },
-    "required": ["translation", "transliteration"],
-}
 
 _SYSTEM_HE = """\
 You are a Hebrew translator. Your ONLY job is to translate text into Hebrew.
@@ -57,63 +40,48 @@ User: "איפה החנות?" → {"translation": "Где магазин?"}
 _SYSTEMS = {"he": _SYSTEM_HE, "ru": _SYSTEM_RU}
 
 
-class OllamaTranslator:
-    def __init__(self, base_url: str = config.ollama_url, model: str = config.ollama_model):
-        self._url = base_url.rstrip("/") + "/api/chat"
+class AnthropicTranslator:
+    def __init__(self, api_key: str = config.anthropic_api_key, model: str = config.anthropic_model):
+        self._api_key = api_key
         self._model = model
-        self._client: httpx.AsyncClient | None = None
+        self._client: anthropic.AsyncAnthropic | None = None
 
     async def start(self) -> None:
-        self._client = httpx.AsyncClient(timeout=60.0)
+        self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
 
     async def stop(self) -> None:
         if self._client:
-            await self._client.aclose()
+            await self._client.close()
             self._client = None
 
     async def translate(self, text: str, src: str, tgt: str) -> str:
         assert self._client is not None, "call start() first"
         system = _SYSTEMS.get(
             tgt,
-            f"Translate to {_LANG_NAME[tgt]}. Return JSON: {{\"translation\": \"...\"}}"
+            f'Translate to {_LANG_NAME[tgt]}. Return JSON: {{"translation": "..."}}'
         )
-        payload = {
-            "model": self._model,
-            "stream": False,
-            "format": _TRANSLATION_SCHEMA,
-            "options": {"temperature": 0},
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": text},
-            ],
-        }
-        resp = await self._client.post(self._url, json=payload)
-        resp.raise_for_status()
-        return json.loads(resp.json()["message"]["content"])["translation"].strip()
+        message = await self._client.messages.create(
+            model=self._model,
+            max_tokens=1024,
+            system=system,
+            messages=[{"role": "user", "content": text}],
+        )
+        return json.loads(message.content[0].text)["translation"].strip()
 
     async def translate_and_transliterate(self, hebrew_word: str) -> dict[str, str]:
         assert self._client is not None, "call start() first"
-        payload = {
-            "model": self._model,
-            "stream": False,
-            "format": _TRANSLITERATE_SCHEMA,
-            "options": {"temperature": 0},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a Hebrew language assistant. "
-                        "For the given Hebrew word or phrase, provide its Russian translation "
-                        "and Latin transliteration. "
-                        'Return JSON: {"translation": "<Russian>", "transliteration": "<Latin>"}'
-                    ),
-                },
-                {"role": "user", "content": hebrew_word},
-            ],
-        }
-        resp = await self._client.post(self._url, json=payload)
-        resp.raise_for_status()
-        return json.loads(resp.json()["message"]["content"])
+        message = await self._client.messages.create(
+            model=self._model,
+            max_tokens=256,
+            system=(
+                "You are a Hebrew language assistant. "
+                "For the given Hebrew word or phrase, provide its Russian translation "
+                "and Latin transliteration. "
+                'Return JSON: {"translation": "<Russian>", "transliteration": "<Latin>"}'
+            ),
+            messages=[{"role": "user", "content": hebrew_word}],
+        )
+        return json.loads(message.content[0].text)
 
 
-translator = OllamaTranslator()
+translator = AnthropicTranslator()

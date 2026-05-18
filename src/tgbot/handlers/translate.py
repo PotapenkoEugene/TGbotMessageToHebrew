@@ -13,7 +13,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Ignore bots and commands
     if msg.from_user and msg.from_user.is_bot:
         return
-    if msg.text.startswith("/"):
+    if msg.text.startswith('/'):
         return
 
     chat_id = msg.chat_id
@@ -29,8 +29,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         translation = await translator.translate(msg.text, src, tgt)
     except Exception as exc:
-        # Silent fail — don't spam chat with error messages
-        context.application.logger.error("Translation error: %s", exc)
+        context.application.logger.error('Translation error: %s', exc)
         return
 
     await msg.reply_text(translation, do_quote=True)
