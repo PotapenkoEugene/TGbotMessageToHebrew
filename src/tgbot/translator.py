@@ -1,5 +1,6 @@
+import asyncio
 import json
-import anthropic
+import re
 
 from .config import config
 
@@ -39,49 +40,55 @@ User: "איפה החנות?" → {"translation": "Где магазин?"}
 
 _SYSTEMS = {"he": _SYSTEM_HE, "ru": _SYSTEM_RU}
 
+_JSON_RE = re.compile(r'\{[^}]+\}', re.DOTALL)
 
-class AnthropicTranslator:
-    def __init__(self, api_key: str = config.anthropic_api_key, model: str = config.anthropic_model):
-        self._api_key = api_key
+
+def _extract_json(text: str) -> str:
+    text = re.sub(r'^```(?:json)?\s*', '', text.strip())
+    text = re.sub(r'\s*```$', '', text)
+    m = _JSON_RE.search(text)
+    return m.group(0) if m else text
+
+
+class ClaudeCliTranslator:
+    def __init__(self, model: str = config.claude_model):
         self._model = model
-        self._client: anthropic.AsyncAnthropic | None = None
 
     async def start(self) -> None:
-        self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
+        pass
 
     async def stop(self) -> None:
-        if self._client:
-            await self._client.close()
-            self._client = None
+        pass
+
+    async def _call(self, prompt: str) -> str:
+        proc = await asyncio.create_subprocess_exec(
+            "claude", "--print", "--model", self._model,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate(input=prompt.encode())
+        return _extract_json(stdout.decode())
 
     async def translate(self, text: str, src: str, tgt: str) -> str:
-        assert self._client is not None, "call start() first"
         system = _SYSTEMS.get(
             tgt,
             f'Translate to {_LANG_NAME[tgt]}. Return JSON: {{"translation": "..."}}'
         )
-        message = await self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            system=system,
-            messages=[{"role": "user", "content": text}],
-        )
-        return json.loads(message.content[0].text)["translation"].strip()
+        prompt = f"{system}\n\nTranslate: {text}"
+        raw = await self._call(prompt)
+        return json.loads(raw)["translation"].strip()
 
     async def translate_and_transliterate(self, hebrew_word: str) -> dict[str, str]:
-        assert self._client is not None, "call start() first"
-        message = await self._client.messages.create(
-            model=self._model,
-            max_tokens=256,
-            system=(
-                "You are a Hebrew language assistant. "
-                "For the given Hebrew word or phrase, provide its Russian translation "
-                "and Latin transliteration. "
-                'Return JSON: {"translation": "<Russian>", "transliteration": "<Latin>"}'
-            ),
-            messages=[{"role": "user", "content": hebrew_word}],
+        prompt = (
+            "You are a Hebrew language assistant. "
+            "For the given Hebrew word or phrase, provide its Russian translation "
+            "and Latin transliteration. "
+            'Return JSON: {"translation": "<Russian>", "transliteration": "<Latin>"}\n\n'
+            f"Word: {hebrew_word}"
         )
-        return json.loads(message.content[0].text)
+        raw = await self._call(prompt)
+        return json.loads(raw)
 
 
-translator = AnthropicTranslator()
+translator = ClaudeCliTranslator()
