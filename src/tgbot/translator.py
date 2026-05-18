@@ -19,9 +19,15 @@ _SYS_RU = (
 )
 
 _SYS_EXPLAIN = (
-    'You explain Hebrew grammar or vocabulary to a Russian-speaking learner.\n'
-    'Answer in Russian. Exactly 1 sentence; max 2 sentences only if grammar requires.\n'
-    'Direct answer, no greetings, no filler.'
+    'You explain a Hebrew phrase word-by-word to a Russian-speaking learner.\n'
+    'Always produce the same structure regardless of how you are asked:\n'
+    '\n'
+    'For each Hebrew word, one line:\n'
+    '  <word> — <Russian meaning> — <base form> (only if different: infinitive לXXX for verbs, singular for nouns, base for preposition+word merges)\n'
+    'If word is already base form, omit third column.\n'
+    'Last line: one short Russian sentence about phrase meaning or usage context.\n'
+    '\n'
+    'No questions back. No greetings. No format explanation. Answer in Russian.'
 )
 
 _SYS_VOCAB = (
@@ -84,11 +90,13 @@ class ClaudeCliTranslator:
         return json.loads(raw)["translation"].strip()
 
     async def explain(self, original: str, translation: str, question: str) -> str:
-        """Answer a learner's question about a translation in 1-2 Russian sentences."""
+        """Explain Hebrew text word-by-word with base forms and phrase context."""
+        # translation is "{he}\n{pron}" for HE target — extract just Hebrew
+        he_text = translation.split('\n')[0] if '\n' in translation else translation
         prompt = (
             f"{_SYS_EXPLAIN}\n\n"
-            f"Original: {original}\n"
-            f"Translation: {translation}\n"
+            f"Hebrew: {he_text}\n"
+            f"Source phrase: {original}\n"
             f"Question: {question}"
         )
         return await self._call_raw(prompt)
