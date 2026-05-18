@@ -8,22 +8,22 @@ _CALLBACK_PREFIX = "quiz:"
 
 
 async def cmd_practice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    words = await get_vocab_words(user_id)
+    words = await get_vocab_words()
+    translatable = [w for w in words if w.translation]
 
-    if len(words) < 2:
+    if len(translatable) < 2:
         await update.message.reply_text(
-            "Need at least 2 saved words to practice. "
+            "Need at least 2 saved words with translations to practice. "
             "Send Hebrew words in DM to build your vocabulary."
         )
         return
 
-    word = await get_practice_word(user_id)
+    word = await get_practice_word()
     if word is None:
         await update.message.reply_text("No words to practice yet.")
         return
 
-    distractors = await get_distractors(user_id, exclude_id=word.id, count=3)
+    distractors = await get_distractors(exclude_id=word.id, count=3)
     if not distractors:
         await update.message.reply_text("Need more words for multiple-choice. Keep adding!")
         return

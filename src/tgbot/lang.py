@@ -1,3 +1,5 @@
+import re
+
 from langdetect import detect, LangDetectException
 
 _HE_BLOCK = range(0x0590, 0x0600)  # Hebrew Unicode block
@@ -36,3 +38,9 @@ def route(src_lang: str) -> tuple[str, str] | None:
     if src_lang in ("ru", "en"):
         return (src_lang, "he")
     return None
+
+
+def extract_hebrew_words(text: str) -> list[str]:
+    """Tokenize Hebrew words from mixed text. Returns runs of Hebrew chars, length >= 2."""
+    tokens = re.split(r'[^֐-׿]+', text)
+    return [t for t in tokens if len(t) >= 2]

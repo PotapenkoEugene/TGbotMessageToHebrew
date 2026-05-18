@@ -13,6 +13,7 @@ from .config import config
 from .storage import init_db
 from .translator import translator
 from .handlers.translate import handle_message
+from .handlers.explain import handle_explain
 from .handlers.commands import cmd_start, cmd_help, cmd_on, cmd_off, cmd_list, cmd_stats
 from .handlers.vocab import handle_vocab_dm
 from .practice import cmd_practice, handle_quiz_callback
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 async def post_init(app) -> None:
     await init_db()
     await translator.start()
-    logger.info("DB initialized, translator ready")
+    logger.info("DB initialized, translator ready (model: %s)", config.claude_model)
 
 
 async def post_shutdown(app) -> None:
@@ -51,15 +52,26 @@ def main() -> None:
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("practice", cmd_practice))
 
-    # DM vocab handler (Hebrew text in private chat)
-    app.add_handler(
-        MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_vocab_dm)
-    )
-
-    # Group/channel message translator (non-command text)
+    # Reply-to-bot explain: must come before translate/vocab handlers
     app.add_handler(
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND & ~filters.ChatType.PRIVATE,
+            filters.TEXT & filters.REPLY & ~filters.COMMAND,
+            handle_explain,
+        )
+    )
+
+    # DM vocab handler: Hebrew text in private chat (non-reply)
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & filters.ChatType.PRIVATE & ~filters.REPLY & ~filters.COMMAND,
+            handle_vocab_dm,
+        )
+    )
+
+    # Group/channel message translator (non-command, non-reply text)
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & ~filters.REPLY & ~filters.ChatType.PRIVATE,
             handle_message,
         )
     )
@@ -67,7 +79,7 @@ def main() -> None:
     # Quiz answer callbacks
     app.add_handler(CallbackQueryHandler(handle_quiz_callback, pattern=r"^quiz:"))
 
-    logger.info("Starting bot with model %s", config.claude_model)
+    logger.info("Starting bot (model: %s)", config.claude_model)
     app.run_polling(drop_pending_updates=True)
 
 

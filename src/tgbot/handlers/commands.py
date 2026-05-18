@@ -52,24 +52,24 @@ async def cmd_off(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    words = await get_vocab_words(user_id)
+    words = await get_vocab_words()
     if not words:
         await update.message.reply_text(
             "No saved words yet. Send me Hebrew words in DM to add them."
         )
         return
-    lines = [f"{w.hebrew} — {w.translation} ({w.transliteration})" for w in words]
-    text = f"Your words ({len(words)}):\n\n" + "\n".join(lines)
-    # Telegram max 4096 chars; truncate gracefully
+    lines = [
+        f"{w.hebrew} — {w.translation} ({w.transliteration}) ×{w.frequency}"
+        for w in words
+    ]
+    text = f"Words ({len(words)}):\n\n" + "\n".join(lines)
     if len(text) > 4000:
         text = text[:4000] + "\n…"
     await update.message.reply_text(text)
 
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    words = await get_vocab_words(user_id)
+    words = await get_vocab_words()
     if not words:
         await update.message.reply_text("No words yet.")
         return
