@@ -36,14 +36,32 @@ _SYS_VOCAB = (
     '{"translation":"<Russian>","transliteration":"<Latin>"}'
 )
 
-_JSON_RE = re.compile(r'\{[^}]+\}', re.DOTALL)
-
-
 def _extract_json(text: str) -> str:
     text = re.sub(r'^```(?:json)?\s*', '', text.strip())
     text = re.sub(r'\s*```$', '', text)
-    m = _JSON_RE.search(text)
-    return m.group(0) if m else text
+    start = text.find('{')
+    if start == -1:
+        return text
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, c in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if c == '\\' and in_string:
+            escape_next = True
+            continue
+        if c == '"':
+            in_string = not in_string
+        elif not in_string:
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+    return text[start:]
 
 
 class ClaudeCliTranslator:

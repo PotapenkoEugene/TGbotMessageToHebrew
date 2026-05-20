@@ -1,3 +1,4 @@
+import logging
 from telegram import Message, Update
 from telegram.ext import ContextTypes
 
@@ -53,7 +54,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         else:
             reply_text = await translator.translate_to_russian(msg.text)
     except Exception as exc:
-        context.application.logger.error('Translation error: %s', exc)
+        logging.getLogger(__name__).error('Translation error: %s', exc)
         return
 
     sent = await msg.reply_text(reply_text, do_quote=True)

@@ -1,3 +1,4 @@
+import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -17,15 +18,18 @@ async def handle_explain(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     stored = await get_bot_message(msg.chat_id, reply.message_id)
-    if not stored:
+    if stored:
+        original, translation = stored
+    elif reply.text:
+        original = reply.text
+        translation = reply.text
+    else:
         return
-
-    original, translation = stored
 
     try:
         explanation = await translator.explain(original, translation, msg.text)
     except Exception as exc:
-        context.application.logger.error('Explain error: %s', exc)
+        logging.getLogger(__name__).error('Explain error: %s', exc)
         return
 
     await msg.reply_text(explanation, do_quote=True)

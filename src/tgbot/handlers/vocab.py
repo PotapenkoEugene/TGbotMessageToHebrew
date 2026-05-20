@@ -1,3 +1,4 @@
+import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -24,7 +25,7 @@ async def handle_vocab_dm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         info = await translator.translate_and_transliterate(msg.text)
     except Exception as exc:
-        context.application.logger.error("Vocab lookup error: %s", exc)
+        logging.getLogger(__name__).error("Vocab lookup error: %s", exc)
         await msg.reply_text("Translation failed.")
         return
 
