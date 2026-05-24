@@ -8,6 +8,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "langdetect>=1.0.9",
     "python-dotenv>=1.0",
+    "claude-agent-sdk>=0.0.20",
 ]
 
 [project.optional-dependencies]

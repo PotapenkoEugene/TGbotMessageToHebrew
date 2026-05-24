@@ -40,12 +40,17 @@ async def test_translate_to_russian(tr):
     assert result == "Привет"
 
 
-async def test_explain_returns_plain_text(tr):
-    explanation = "  Окончание ת указывает на женский род.  ".encode("utf-8")
-    with patch("asyncio.create_subprocess_exec", return_value=_make_proc(explanation)):
-        result = await tr.explain("בַּיִת", "дом", "почему ת в конце?")
-    assert "Окончание" in result
-    assert result == result.strip()
+async def test_explain_returns_dict(tr):
+    payload = json.dumps({
+        "rows": [{"he": "בַּיִת", "base": "", "pron": "ба́йит", "ru": "дом"}],
+        "context": "Слово בַּיִת означает «дом» и относится к мужскому роду.",
+    }).encode()
+    with patch("asyncio.create_subprocess_exec", return_value=_make_proc(payload)):
+        result = await tr.explain("בַּיִת", "дом")
+    assert isinstance(result, dict)
+    assert result["rows"][0]["he"] == "בַּיִת"
+    assert result["rows"][0]["pron"] == "ба́йит"
+    assert "context" in result
 
 
 async def test_translate_and_transliterate(tr):

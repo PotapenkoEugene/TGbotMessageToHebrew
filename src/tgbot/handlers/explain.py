@@ -2,13 +2,20 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from ..format import build_explain_table
 from ..storage import get_bot_message, save_problem
 from ..translator import translator
+
+log = logging.getLogger(__name__)
 
 
 async def handle_explain(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     if not msg or not msg.text:
+        return
+
+    trigger = msg.text.strip().rstrip('!.?…').strip().lower()
+    if trigger != 'объясни':
         return
 
     reply = msg.reply_to_message
@@ -27,17 +34,18 @@ async def handle_explain(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     try:
-        explanation = await translator.explain(original, translation, msg.text)
+        payload = await translator.explain(original, translation)
+        rendered = build_explain_table(payload)
     except Exception as exc:
-        logging.getLogger(__name__).error('Explain error: %s', exc)
+        log.error('Explain error: %s', exc)
         return
 
-    await msg.reply_text(explanation, do_quote=True)
+    await msg.reply_text(rendered, parse_mode='HTML', do_quote=True)
     await save_problem(
         msg.chat_id,
         msg.from_user.id,
         original,
         translation,
         msg.text,
-        explanation,
+        rendered,
     )
