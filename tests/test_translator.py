@@ -1,64 +1,71 @@
 import asyncio
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
-from tgbot.translator import ClaudeCliTranslator, _extract_json
-
-
-def _make_proc(stdout: bytes) -> MagicMock:
-    proc = MagicMock()
-    proc.communicate = AsyncMock(return_value=(stdout, b""))
-    return proc
+from tgbot.translator import AgentSdkTranslator, _extract_json
 
 
-@pytest.fixture
-def tr():
-    return ClaudeCliTranslator(model="claude-haiku-4-5")
+def _make_slot_mock(json_payload: dict):
+    """Return a translator with _ask mocked to return json_payload."""
+    tr = AgentSdkTranslator.__new__(AgentSdkTranslator)
+    # Set dummy slot attrs so method bodies can reference them as arguments.
+    dummy = MagicMock()
+    tr._he = dummy
+    tr._ru = dummy
+    tr._explain = dummy
+    tr._grammar = dummy
+    tr._ask = AsyncMock(return_value=json.dumps(json_payload))
+    return tr
 
 
-async def test_translate_to_hebrew(tr):
-    payload = json.dumps({"he": "שלום", "pron": "шало́м"}).encode()
-    with patch("asyncio.create_subprocess_exec", return_value=_make_proc(payload)):
-        he, pron = await tr.translate_to_hebrew("Hello")
+@pytest.mark.asyncio
+async def test_translate_to_hebrew():
+    tr = _make_slot_mock({"he": "שלום", "pron": "шало́м"})
+    he, pron = await tr.translate_to_hebrew("Hello")
     assert he == "שלום"
     assert pron == "шало́м"
 
 
-async def test_translate_to_hebrew_strips_fence(tr):
-    raw = b"```json\n" + json.dumps({"he": "בוקר טוב", "pron": "бо́кер тов"}).encode() + b"\n```"
-    with patch("asyncio.create_subprocess_exec", return_value=_make_proc(raw)):
-        he, pron = await tr.translate_to_hebrew("Good morning")
-    assert he == "בוקר טוב"
-    assert "бо́кер" in pron
-
-
-async def test_translate_to_russian(tr):
-    payload = json.dumps({"translation": "Привет"}).encode()
-    with patch("asyncio.create_subprocess_exec", return_value=_make_proc(payload)):
-        result = await tr.translate_to_russian("שלום")
+@pytest.mark.asyncio
+async def test_translate_to_russian():
+    tr = _make_slot_mock({"translation": "Привет"})
+    result = await tr.translate_to_russian("שלום")
     assert result == "Привет"
 
 
-async def test_explain_returns_dict(tr):
-    payload = json.dumps({
-        "rows": [{"he": "בַּיִת", "base": "", "pron": "ба́йит", "ru": "дом"}],
-        "context": "Слово בַּיִת означает «дом» и относится к мужскому роду.",
-    }).encode()
-    with patch("asyncio.create_subprocess_exec", return_value=_make_proc(payload)):
-        result = await tr.explain("בַּיִת", "дом")
+@pytest.mark.asyncio
+async def test_explain_returns_dict():
+    payload = {
+        "rows": [{"he": "בַּיִת", "base": "", "ru": "дом"}],
+        "context": "Слово בַּיִת означает «дом».",
+    }
+    tr = _make_slot_mock(payload)
+    result = await tr.explain("בַּיִת", "дом")
     assert isinstance(result, dict)
     assert result["rows"][0]["he"] == "בַּיִת"
-    assert result["rows"][0]["pron"] == "ба́йит"
     assert "context" in result
 
 
-async def test_translate_and_transliterate(tr):
-    payload = json.dumps({"translation": "мир", "transliteration": "olam"}).encode()
-    with patch("asyncio.create_subprocess_exec", return_value=_make_proc(payload)):
-        result = await tr.translate_and_transliterate("עולם")
-    assert result["translation"] == "мир"
-    assert result["transliteration"] == "olam"
+@pytest.mark.asyncio
+async def test_grammar_check_returns_dict():
+    payload = {
+        "issues": [{"phrase": "אני הולך", "suggest": "אני הולך", "why": "Верно"}],
+        "summary": "В целом предложение правильное.",
+    }
+    tr = _make_slot_mock(payload)
+    result = await tr.grammar_check("אני הולך")
+    assert isinstance(result, dict)
+    assert "issues" in result
+    assert "summary" in result
+
+
+@pytest.mark.asyncio
+async def test_grammar_check_no_issues():
+    payload = {"issues": [], "summary": "Всё верно, грамматика корректна."}
+    tr = _make_slot_mock(payload)
+    result = await tr.grammar_check("שלום")
+    assert result["issues"] == []
 
 
 def test_extract_json_strips_fence():

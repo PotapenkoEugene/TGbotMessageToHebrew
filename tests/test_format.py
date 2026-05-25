@@ -1,67 +1,106 @@
 import pytest
-from tgbot.format import build_explain_table
+from tgbot.format import build_explain_table, build_grammar_reply
 
 
 _SAMPLE = {
     "rows": [
-        {"he": "הולך", "base": "ללכת", "pron": "холе́х", "ru": "идёт"},
-        {"he": "הביתה", "base": "", "pron": "хабайта́", "ru": "домой"},
+        {"he": "הולך", "base": "ללכת", "ru": "идёт"},
+        {"he": "הביתה", "base": "", "ru": "домой"},
     ],
     "context": "Фраза означает «идёт домой».",
 }
 
 
-def test_output_wrapped_in_pre():
+# --- build_explain_table ---
+
+def test_row_with_base():
     out = build_explain_table(_SAMPLE)
-    assert out.startswith("<pre>")
-    assert "</pre>" in out
+    assert "הולך — идёт — ללכת" in out
 
 
-def test_context_appended_after_pre():
+def test_row_without_base():
     out = build_explain_table(_SAMPLE)
-    pre_end = out.index("</pre>")
-    assert "идёт домой" in out[pre_end:]
+    assert "הביתה — домой" in out
+    assert "הביתה — домой —" not in out
 
 
-def test_headers_present():
+def test_context_appended():
     out = build_explain_table(_SAMPLE)
-    for header in ("Слово", "База", "Произн.", "Перевод"):
-        assert header in out
+    assert "идёт домой" in out
 
 
-def test_all_rows_present():
+def test_no_table_chars():
     out = build_explain_table(_SAMPLE)
-    assert "הולך" in out
-    assert "ללכת" in out
-    assert "холе́х" in out
-    assert "идёт" in out
-    assert "הביתה" in out
-    assert "хабайта́" in out
+    assert "|" not in out
+    assert "-+-" not in out
+    assert "<pre>" not in out
 
 
 def test_html_escaped():
     payload = {
-        "rows": [{"he": "א", "base": "", "pron": "а́леф", "ru": "буква & <знак>"}],
+        "rows": [{"he": "א", "base": "", "ru": "буква & <знак>"}],
         "context": "Контекст с <тегом>.",
     }
     out = build_explain_table(payload)
-    assert "&amp;" in out or "<тегом>" not in out
+    assert "&amp;" in out
     assert "&lt;" in out
 
 
 def test_empty_rows():
     out = build_explain_table({"rows": [], "context": "Нет слов."})
-    assert "<pre>" in out
     assert "Нет слов." in out
 
 
 def test_no_context():
     payload = {
+        "rows": [{"he": "שלום", "base": "", "ru": "мир"}],
+        "context": "",
+    }
+    out = build_explain_table(payload)
+    assert "שלום — мир" in out
+    assert "\n\n" not in out
+
+
+def test_pron_field_ignored():
+    payload = {
         "rows": [{"he": "שלום", "base": "", "pron": "шало́м", "ru": "мир"}],
         "context": "",
     }
     out = build_explain_table(payload)
-    assert out.endswith("</pre>")
+    assert "шало́м" not in out
+
+
+# --- build_grammar_reply ---
+
+def test_grammar_no_issues():
+    payload = {"issues": [], "summary": "Всё верно."}
+    out = build_grammar_reply(payload)
+    assert out == "Всё верно."
+
+
+def test_grammar_empty_issues_no_summary():
+    out = build_grammar_reply({"issues": []})
+    assert out == "Всё верно."
+
+
+def test_grammar_with_issues():
+    payload = {
+        "issues": [{"phrase": "אני הלכ", "suggest": "אני הלך", "why": "Неверное спряжение"}],
+        "summary": "Одна ошибка в глаголе.",
+    }
+    out = build_grammar_reply(payload)
+    assert "אני הלכ → אני הלך — Неверное спряжение" in out
+    assert "Одна ошибка в глаголе." in out
+
+
+def test_grammar_html_escaped():
+    payload = {
+        "issues": [{"phrase": "a & b", "suggest": "a & b", "why": "<причина>"}],
+        "summary": "",
+    }
+    out = build_grammar_reply(payload)
+    assert "&amp;" in out
+    assert "&lt;" in out
 
 
 # --- Trigger filter logic (pure string, no async needed) ---
