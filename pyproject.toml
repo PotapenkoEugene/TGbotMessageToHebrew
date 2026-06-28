@@ -23,6 +23,13 @@ dev = [
 local = [
     "mlx-lm>=0.24",
 ]
+# For testing DictaLM 3.0 via PyTorch MPS (transformers already a transitive dep of mlx-lm).
+# Install: uv sync --extra v3
+v3 = [
+    "torch>=2.3",
+    "transformers>=4.45",
+    "accelerate>=0.30",
+]
 
 [tool.ruff]
 line-length = 100
