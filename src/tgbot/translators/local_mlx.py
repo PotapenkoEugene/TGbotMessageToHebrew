@@ -9,11 +9,12 @@ Set env vars:
     LOCAL_LLM_MODEL=dictalm3-nemotron-12b    (default; must match what mlx_lm.server loaded)
     PRON_STYLE=cyrillic|latin|both           (default: cyrillic)
 
-When PRON_STYLE=both the translation handler displays a 3-line reply:
-    {Hebrew}
-    {Cyrillic pronunciation}
-    {Latin pronunciation}
-This is designed for the eval phase so you can compare both scripts side-by-side.
+pron_style behaviour:
+  cyrillic: DictaLM returns {he, pron_cyr}. Bot shows: Hebrew / Cyrillic pron.
+  latin:    DictaLM returns {he} only. Latin pron is computed deterministically
+            by nakdimon + nikud→Latin converter (pron.py). Bot shows: Hebrew / Latin pron.
+  both:     DictaLM returns {he, pron_cyr}. Latin pron is computed deterministically.
+            Bot shows: Hebrew / Cyrillic pron / Latin pron (three lines for eval comparison).
 """
 
 import json
@@ -23,6 +24,7 @@ from typing import Any
 import httpx
 
 from ..config import config
+from ..pron import hebrew_to_latin_pron
 from .base import _extract_json
 
 log = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ log = logging.getLogger(__name__)
 # System prompts
 # ---------------------------------------------------------------------------
 
-# Cyrillic-only pronunciation (matches the existing Claude schema exactly)
+# Cyrillic pronunciation — matches the existing Claude schema exactly.
 _SYS_HE_CYR = (
     'Translate user input to Hebrew. Reply with JSON only, no prose.\n'
     'Schema: {"he":"<Hebrew>","pron":"<Cyrillic pronunciation>"}\n'
@@ -45,64 +47,34 @@ _SYS_HE_CYR = (
     'Example: input "Good morning" → {"he":"בוקר טוב","pron":"бо́кер тов"}'
 )
 
-# Latin-only pronunciation — few-shot format (rule lists ignored by Zephyr, examples work)
-_SYS_HE_LAT = (
-    'You are a Hebrew translator. For each input, output JSON: {"he":"<Hebrew text>","pron":"<reading guide>"}\n'
-    'pron rule: ONE syllable per word in UPPERCASE = stressed. All other letters lowercase. No apostrophes ever.\n'
-    'sh=ש kh=כ/ח ts=צ v=ו/ב(v) b=ב(b) k=ק/כ y=י s=ס t=ת h=ה. Stress usually on LAST syllable.\n'
+# Hebrew-only — for latin/both modes where pron is computed deterministically.
+_SYS_HE_ONLY = (
+    'You are a Hebrew translator. For each input, output JSON: {"he":"<Hebrew text>"}\n'
+    '"he" must contain ONLY Hebrew letters and spaces. No Latin, Cyrillic, or other scripts.\n'
     '\n'
     'Input: good morning\n'
-    'Output: {"he":"בוקר טוב","pron":"BOker TOV"}\n'
+    'Output: {"he":"בוקר טוב"}\n'
     '\n'
     'Input: thank you very much\n'
-    'Output: {"he":"תודה רבה מאוד","pron":"toDA raBA meOD"}\n'
+    'Output: {"he":"תודה רבה מאוד"}\n'
     '\n'
     'Input: I want water\n'
-    'Output: {"he":"אני רוצה מים","pron":"aNI roTSE maYIM"}\n'
+    'Output: {"he":"אני רוצה מים"}\n'
     '\n'
     'Input: many people sitting in a scary room\n'
-    'Output: {"he":"הרבה אנשים יושבים בחדר מפחיד","pron":"harBE anaSHIM yoshVIM bakhaDAR mafHID"}\n'
+    'Output: {"he":"הרבה אנשים יושבים בחדר מפחיד"}\n'
     '\n'
     'Input: and nearby\n'
-    'Output: {"he":"ובסמוך","pron":"vesamUKH"}\n'
-    '\n'
-    'Input: why did he start speaking in capital letters in English\n'
-    'Output: {"he":"למה הוא התחיל לדבר באותיות גדולות באנגלית","pron":"laMA hu hitKHIL ledaBER beotiyOT gdoLOT beangLIT"}\n'
+    'Output: {"he":"ובסמוך"}\n'
     '\n'
     'Input: where is the bathroom\n'
-    'Output: {"he":"איפה השירותים","pron":"EYfo hashiruTIM"}\n'
+    'Output: {"he":"איפה השירותים"}\n'
     '\n'
     'Input: I love you\n'
-    'Output: {"he":"אני אוהב אותך","pron":"aNI oHEV otKHA"}\n'
-    '\n'
-    'Input: the meeting is tomorrow at ten\n'
-    'Output: {"he":"הפגישה מחר בעשר","pron":"hapgiSHA maCHAR baSEser"}\n'
+    'Output: {"he":"אני אוהב אותך"}\n'
     '\n'
     'Input: excuse me, do you speak Russian\n'
-    'Output: {"he":"סליחה, אתה מדבר רוסית","pron":"sliKHA aTa medaBER ruSIT"}\n'
-)
-
-# Both scripts — for eval comparison
-_SYS_HE_BOTH = (
-    'Translate user input to Hebrew. Reply with JSON only, no prose.\n'
-    'Schema: {"he":"<Hebrew>","pron_cyr":"<Cyrillic pronunciation>","pron_lat":"<Latin pronunciation>"}\n'
-    '\n'
-    'Rules for "he": Hebrew letters only (U+0590-U+05FF), spaces, standard punctuation.\n'
-    '\n'
-    'Rules for "pron_cyr": Russian Cyrillic phonetics. '
-    'Mark stress with combining acute accent U+0301 over the stressed vowel (е́ а́ и́ о́ у́). '
-    'All lowercase. No uppercase or asterisks.\n'
-    '\n'
-    'Rules for "pron_lat" — follow exactly:\n'
-    '- Write the stressed syllable in UPPERCASE. All other letters lowercase. NOTHING ELSE marks stress.\n'
-    '- NO apostrophes, NO dashes in pron_lat — UPPERCASE syllable is the only stress marker.\n'
-    '- Hebrew phonetics: sh=ש, kh=כ/ח, ts=צ, v=ו/ב(v), b=ב(b), k=ק/כ, r=ר, y=י, s=ס/שׂ, t=ת/ט, h=ה.\n'
-    '- Hebrew stress usually falls on the LAST syllable (e.g. toDA, anaSHIM, hoLEKH).\n'
-    '\n'
-    'Examples:\n'
-    '  "Good morning" → {"he":"בוקר טוב","pron_cyr":"бо́кер тов","pron_lat":"BOker TOV"}\n'
-    '  "Thank you" → {"he":"תודה רבה","pron_cyr":"тода́ раба́","pron_lat":"toDA raBA"}\n'
-    '  "many people" → {"he":"הרבה אנשים","pron_cyr":"харбэ́ анаши́м","pron_lat":"harBE anaSHIM"}\n'
+    'Output: {"he":"סליחה, אתה מדבר רוסית"}\n'
 )
 
 _SYS_RU = 'Translate Hebrew input to Russian. Reply with JSON only, no prose, no code fences: {"translation":"<Russian>"}'
@@ -130,10 +102,9 @@ _SYS_GRAMMAR = (
 
 def _he_system_prompt() -> str:
     style = config.pron_style
-    if style == "latin":
-        return _SYS_HE_LAT
-    if style == "both":
-        return _SYS_HE_BOTH
+    if style in ('latin', 'both'):
+        # DictaLM returns Hebrew only; pron computed deterministically
+        return _SYS_HE_ONLY
     return _SYS_HE_CYR  # default: cyrillic
 
 
@@ -189,16 +160,23 @@ class LocalLlmTranslator:
         return _extract_json(content)
 
     async def translate_to_hebrew(self, text: str) -> tuple[str, str]:
-        raw = await self._ask(_he_system_prompt(), text)
+        # Few-shot prompts use "Input: X\nOutput:" to trigger continuation.
+        he_user = f"Input: {text}\nOutput:"
+        raw = await self._ask(_he_system_prompt(), he_user)
         data = json.loads(raw)
         he = data["he"].strip()
-        if config.pron_style == "both":
-            pron = data["pron_cyr"].strip() + "\n" + data["pron_lat"].strip()
-        elif config.pron_style == "latin":
-            pron = data["pron"].strip()
-        else:
-            pron = data["pron"].strip()
-        return he, pron
+
+        style = config.pron_style
+        if style in ('latin', 'both'):
+            lat_pron = hebrew_to_latin_pron(he)
+            if style == 'latin':
+                return he, lat_pron
+            # 'both': also get Cyrillic pron from LLM (separate call)
+            raw2 = await self._ask(_SYS_HE_CYR, he_user)
+            cyr_pron = json.loads(raw2).get("pron", "").strip()
+            return he, cyr_pron + "\n" + lat_pron
+        # cyrillic
+        return he, data["pron"].strip()
 
     async def translate_to_russian(self, text: str) -> str:
         raw = await self._ask(_SYS_RU, text)

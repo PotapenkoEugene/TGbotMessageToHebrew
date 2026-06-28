@@ -1,7 +1,7 @@
 [project]
 name = "tgbot-message-to-hebrew"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot[ext]>=21.0",
     "httpx>=0.27",
@@ -22,6 +22,7 @@ dev = [
 # Install: uv sync --extra local
 local = [
     "mlx-lm>=0.24",
+    "nakdimon>=0.2",
 ]
 # For testing DictaLM 3.0 via PyTorch MPS (transformers already a transitive dep of mlx-lm).
 # Install: uv sync --extra v3

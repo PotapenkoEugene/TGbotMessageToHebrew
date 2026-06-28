@@ -57,6 +57,7 @@ async def test_translate_to_hebrew_cyrillic():
 @respx.mock
 @pytest.mark.asyncio
 async def test_translate_to_hebrew_both():
+    """both mode: call 1 returns {he}, call 2 returns {he,pron}; Latin pron is deterministic."""
     os.environ["PRON_STYLE"] = "both"
     import importlib
     import tgbot.config as cfg_mod
@@ -66,16 +67,39 @@ async def test_translate_to_hebrew_both():
     from tgbot.translators.local_mlx import LocalLlmTranslator as LLT
 
     tr = LLT()
+    respx.post("http://localhost:8080/v1/chat/completions").mock(side_effect=[
+        httpx.Response(200, json=_make_chat_response({"he": "שלום"})),
+        httpx.Response(200, json=_make_chat_response({"he": "שלום", "pron": "шало́м"})),
+    ])
+    he, pron = await tr.translate_to_hebrew("Hello")
+    assert he == "שלום"
+    assert "шало́м" in pron           # Cyrillic from LLM
+    assert "sheLOM" in pron           # Latin from deterministic converter
+    assert "\n" in pron               # two-line
+    await tr.stop()
+    os.environ["PRON_STYLE"] = "cyrillic"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_translate_to_hebrew_latin():
+    """latin mode: LLM returns {he} only; Latin pron computed deterministically via nakdimon."""
+    os.environ["PRON_STYLE"] = "latin"
+    import importlib
+    import tgbot.config as cfg_mod
+    importlib.reload(cfg_mod)
+    from tgbot.translators import local_mlx as lm_mod
+    importlib.reload(lm_mod)
+    from tgbot.translators.local_mlx import LocalLlmTranslator as LLT
+
+    tr = LLT()
     respx.post("http://localhost:8080/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_make_chat_response(
-            {"he": "שלום", "pron_cyr": "шало́м", "pron_lat": "SHAlom"}
-        ))
+        return_value=httpx.Response(200, json=_make_chat_response({"he": "שלום"}))
     )
     he, pron = await tr.translate_to_hebrew("Hello")
     assert he == "שלום"
-    assert "шало́м" in pron
-    assert "SHAlom" in pron
-    assert "\n" in pron  # two-line
+    assert pron == "sheLOM"   # deterministic: nakdimon gives שְׁלוֹם → sheLOM
+    assert "\n" not in pron   # single line
     await tr.stop()
     os.environ["PRON_STYLE"] = "cyrillic"
 
