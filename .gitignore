@@ -9,3 +9,10 @@ dist/
 .ruff_cache/
 .pytest_cache/
 *.egg-info/
+# Eval results (generated JSON + HTML, can be large)
+eval_results/*.json
+eval_results/*.html
+# Downloaded MLX model weights
+*.safetensors
+*.gguf
+mlx_models/

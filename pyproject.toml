@@ -18,6 +18,11 @@ dev = [
     "pytest-asyncio>=0.23",
     "respx>=0.21",
 ]
+# Apple Silicon only — requires macOS + Apple Silicon hardware.
+# Install: uv sync --extra local
+local = [
+    "mlx-lm>=0.24",
+]
 
 [tool.ruff]
 line-length = 100

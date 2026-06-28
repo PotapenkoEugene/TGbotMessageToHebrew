@@ -28,7 +28,10 @@ logger = logging.getLogger(__name__)
 async def post_init(app) -> None:
     await init_db()
     await translator.start()
-    logger.info("DB initialized, translator ready (model: %s)", config.claude_model)
+    logger.info(
+        "DB initialized, translator ready (backend: %s, model: %s)",
+        config.translator_backend, config.claude_model,
+    )
 
 
 async def post_shutdown(app) -> None:
@@ -79,7 +82,10 @@ def main() -> None:
     # Quiz answer callbacks
     app.add_handler(CallbackQueryHandler(handle_quiz_callback, pattern=r"^quiz:"))
 
-    logger.info("Starting bot (model: %s)", config.claude_model)
+    logger.info(
+        "Starting bot (backend: %s, model: %s)",
+        config.translator_backend, config.claude_model,
+    )
     app.run_polling(drop_pending_updates=True)
 
 
