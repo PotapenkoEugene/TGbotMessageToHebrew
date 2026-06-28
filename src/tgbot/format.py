@@ -10,12 +10,14 @@ def build_explain_table(payload: dict) -> str:
         he = r.get("he", "").strip()
         ru = r.get("ru", "").strip()
         base = r.get("base", "").strip()
+        pron = r.get("pron", "").strip()
         if not he or not ru:
             continue
+        he_part = f"{he} [{pron}]" if pron else he
         if base and base != he:
-            lines.append(f"{he} — {ru} — {base}")
+            lines.append(f"{he_part} — {ru} — {base}")
         else:
-            lines.append(f"{he} — {ru}")
+            lines.append(f"{he_part} — {ru}")
 
     result = html.escape("\n".join(lines))
     if context:

@@ -30,5 +30,13 @@ class Config:
     # "both" outputs Cyrillic + Latin on separate lines — use during eval to compare side-by-side.
     pron_style: str = os.getenv("PRON_STYLE", "cyrillic")
 
+    # Append /nothink to system prompts for local backend (disables Qwen3 chain-of-thought).
+    # Harmless for models that don't support it. Default: true.
+    local_llm_nothink: bool = os.getenv("LOCAL_LLM_NOTHINK", "true").lower() == "true"
+
+    # Set to true for models that don't support the system role (e.g. DictaLM 2.0 / Zephyr).
+    # System prompt is merged into the first user message instead.
+    local_llm_no_system_role: bool = os.getenv("LOCAL_LLM_NO_SYSTEM_ROLE", "false").lower() == "true"
+
 
 config = Config()

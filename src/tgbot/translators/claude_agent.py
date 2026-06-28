@@ -45,11 +45,12 @@ _SYS_RU = 'Translate Hebrew input to Russian. Reply with JSON only: {"translatio
 _SYS_EXPLAIN = (
     'Explain a Hebrew phrase word-by-word for a Russian-speaking learner.\n'
     'Reply with JSON only, no prose, no markdown, no code fences:\n'
-    '{"rows":[{"he":"<word as in phrase>","base":"<base form; empty string if same as he>","ru":"<Russian meaning>"}],'
+    '{"rows":[{"he":"<word as in phrase>","base":"<base form; empty string if same as he>","ru":"<Russian meaning>","pron":"<Latin pronunciation, stressed syllable UPPERCASE>"}],'
     '"context":"<one short Russian sentence on phrase meaning or usage>"}\n'
     'Rules: he = surface form (Hebrew letters only); '
     'base = infinitive (לXXX) for verbs, singular for nouns, empty string if already base form; '
     'ru = Russian meaning, lowercase; '
+    'pron = Latin-script pronunciation, stressed syllable in UPPERCASE (e.g. "BOker tov", "shaLOM"); '
     'context = exactly one plain Russian sentence, max 20 words, no list, no formatting.'
 )
 

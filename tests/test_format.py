@@ -61,13 +61,32 @@ def test_no_context():
     assert "\n\n" not in out
 
 
-def test_pron_field_ignored():
+def test_pron_field_shown():
     payload = {
-        "rows": [{"he": "שלום", "base": "", "pron": "шало́м", "ru": "мир"}],
+        "rows": [{"he": "שלום", "base": "", "pron": "shaLOM", "ru": "мир"}],
         "context": "",
     }
     out = build_explain_table(payload)
-    assert "шало́м" not in out
+    assert "שלום [shaLOM] — мир" in out
+
+
+def test_pron_with_base():
+    payload = {
+        "rows": [{"he": "הולך", "base": "ללכת", "pron": "hoLECH", "ru": "идёт"}],
+        "context": "",
+    }
+    out = build_explain_table(payload)
+    assert "הולך [hoLECH] — идёт — ללכת" in out
+
+
+def test_pron_absent_no_brackets():
+    payload = {
+        "rows": [{"he": "שלום", "base": "", "ru": "мир"}],
+        "context": "",
+    }
+    out = build_explain_table(payload)
+    assert "[" not in out
+    assert "שלום — мир" in out
 
 
 # --- build_grammar_reply ---

@@ -135,12 +135,19 @@ class LocalLlmTranslator:
         await self._client.aclose()
 
     async def _ask(self, system_prompt: str, user_content: str) -> str:
+        # /nothink disables Qwen3 chain-of-thought mode; harmless for other models.
+        sys = system_prompt + "\n/nothink" if config.local_llm_nothink else system_prompt
+        if config.local_llm_no_system_role:
+            # Zephyr/DictaLM chat template: no system role → merge into user message.
+            messages = [{"role": "user", "content": f"{sys}\n\n{user_content}"}]
+        else:
+            messages = [
+                {"role": "system", "content": sys},
+                {"role": "user", "content": user_content},
+            ]
         payload = {
             "model": config.local_llm_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ],
+            "messages": messages,
             "temperature": 0,
         }
         resp = await self._client.post(
