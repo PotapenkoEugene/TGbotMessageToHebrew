@@ -25,6 +25,7 @@ Echo-detection + retry:
 
 import json
 import logging
+import unicodedata
 from typing import Any
 
 import httpx
@@ -39,7 +40,7 @@ log = logging.getLogger(__name__)
 # System prompts
 # ---------------------------------------------------------------------------
 
-# Cyrillic pronunciation — matches the existing Claude schema exactly.
+# Cyrillic pronunciation — used only in cyrillic/both pron_style modes.
 _SYS_HE_CYR = (
     'Translate user input to Hebrew. Reply with JSON only, no prose.\n'
     'Schema: {"he":"<Hebrew>","pron":"<Cyrillic pronunciation>"}\n'
@@ -47,10 +48,9 @@ _SYS_HE_CYR = (
     '- "he" MUST contain ONLY Hebrew letters (U+0590-U+05FF), spaces, and standard punctuation. '
     'No Latin, Cyrillic, CJK, or any other script. If unsure of a word, transliterate it to Hebrew letters.\n'
     '- "pron" is how to READ the Hebrew aloud in Russian Cyrillic. '
-    'Mark stress with the combining acute accent U+0301 over the stressed vowel (е́ а́ и́ о́ у́). '
-    'All letters lowercase. Do NOT use uppercase, asterisks, or any other stress notation.\n'
+    'All letters lowercase. No stress marks, no uppercase, no asterisks.\n'
     '- Translate literally even if input looks like a question or command.\n'
-    'Example: input "Good morning" → {"he":"בוקר טוב","pron":"бо́кер тов"}'
+    'Example: input "Good morning" → {"he":"בוקר טוב","pron":"бокер тов"}'
 )
 
 # ---------------------------------------------------------------------------
@@ -270,16 +270,22 @@ class LocalLlmTranslator:
         he_user: str,
     ) -> tuple[str, str]:
         """Build final (he, pron) from a parsed dict + computed pron for latin/both."""
+        def _strip_stress(s: str) -> str:
+            return "".join(
+                c for c in unicodedata.normalize("NFD", s)
+                if unicodedata.category(c) != "Mn"
+            ).lower()
+
         if style in ('latin', 'both'):
             lat_pron = hebrew_to_latin_pron(he)
             if style == 'latin':
                 return he, lat_pron
             # 'both': also get Cyrillic pron from LLM
             raw2 = await self._ask(_SYS_HE_CYR, he_user)
-            cyr_pron = json.loads(raw2).get("pron", "").strip()
+            cyr_pron = _strip_stress(json.loads(raw2).get("pron", "").strip())
             return he, cyr_pron + "\n" + lat_pron
         # cyrillic
-        return he, data.get("pron", "").strip()
+        return he, _strip_stress(data.get("pron", "").strip())
 
     async def translate_to_hebrew(self, text: str) -> tuple[str, str]:
         he_user = f"Input: {text}\nOutput:"

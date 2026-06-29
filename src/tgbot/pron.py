@@ -1,11 +1,11 @@
 """
 Deterministic Hebrew → Latin phonetics pipeline.
 
-  unvocalized Hebrew  →  nakdimon (add nikud)  →  nikud_to_latin  →  stressed Latin
+  unvocalized Hebrew  →  nakdimon (add nikud)  →  nikud_to_latin  →  Latin phonetics
 
 Usage:
     from tgbot.pron import hebrew_to_latin_pron
-    pron = hebrew_to_latin_pron("שלום")  # → "sheLOM"
+    pron = hebrew_to_latin_pron("שלום")  # → "shalom"
 """
 
 import re
@@ -67,7 +67,6 @@ def _word_to_latin(word: str, word_pos: int = 0) -> str:
     - ה with no vowel at word end → silent
     - shva at word-start (first consonant) → vocal 'e'
     - shva elsewhere → silent
-    - Stress: last non-empty syllable (milra = default Israeli Hebrew stress)
     """
     chars = list(word)
     n = len(chars)
@@ -169,8 +168,7 @@ def _word_to_latin(word: str, word_pos: int = 0) -> str:
     if not syllables:
         return ''
 
-    # Milra stress: uppercase the last syllable
-    return ''.join(syllables[:-1]) + syllables[-1].upper()
+    return ''.join(syllables)
 
 
 # ---------------------------------------------------------------------------
