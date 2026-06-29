@@ -45,12 +45,14 @@ _SYS_RU = 'Translate Hebrew input to Russian. Reply with JSON only: {"translatio
 _SYS_EXPLAIN = (
     'Explain a Hebrew phrase word-by-word for a Russian-speaking learner.\n'
     'Reply with JSON only, no prose, no markdown, no code fences:\n'
-    '{"rows":[{"he":"<word as in phrase>","base":"<base form; empty string if same as he>","ru":"<Russian meaning>","pron":"<Latin pronunciation, stressed syllable UPPERCASE>"}],'
+    '{"rows":[{"he":"<word as in phrase>","base":"<base form; empty string if same as he>","ru":"<Russian meaning>","pron":"<Latin pronunciation, root consonant letters UPPERCASE>"}],'
     '"context":"<one short Russian sentence on phrase meaning or usage>"}\n'
     'Rules: he = surface form (Hebrew letters only); '
     'base = infinitive (לXXX) for verbs, singular for nouns, empty string if already base form; '
     'ru = Russian meaning, lowercase; '
-    'pron = Latin-script pronunciation, stressed syllable in UPPERCASE (e.g. "BOker tov", "shaLOM"); '
+    'pron = Latin-script pronunciation; UPPERCASE exactly the consonant letters of the word\'s triconsonantal root (shoresh); all other letters (vowels, non-root consonants) lowercase; '
+    'words with no root (articles, prepositions, particles, pronouns, attached prefixes such as ה/ב/ל/מ/ו/כ/ש) fully lowercase; '
+    'examples: root ש-ל-מ → "SHaLoM", root ב-ק-ר → "BoKeR", הספר → "ha-SeFeR" (ha- lowercase, root ס-פ-ר uppercase); '
     'context = exactly one plain Russian sentence, max 20 words, no list, no formatting.'
 )
 
